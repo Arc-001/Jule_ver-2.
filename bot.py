@@ -1,10 +1,13 @@
 import discord
-import google.generativeai as gemini
-from collections import deque
-import subprocess
 import json
 import os
+import subprocess
+from collections import deque
 from dotenv import load_dotenv
+
+# LangChain imports
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain.schema import HumanMessage
 
 # Load environment variables from .env file
 load_dotenv()
@@ -13,9 +16,13 @@ load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 print(DISCORD_TOKEN)
-# Configure Gemini API
-gemini.configure(api_key=GEMINI_API_KEY or "ENTER YOUR API KEY")
-model = gemini.GenerativeModel("gemini-2.0")
+
+# Configure LangChain with Gemini
+llm = ChatGoogleGenerativeAI(
+    model="gemini-2.0-flash",
+    google_api_key=GEMINI_API_KEY,
+    temperature=0.7
+)
 
 # Role mapping name(str) -> role id(int)
 #example role mapping with role to role id maping
@@ -77,15 +84,9 @@ def restart_server():
         print(f"Failed to restart server: {e}")
 
 def get_str(prompt):
-    response = model.generate_content(prompt)
-    buffer = []
-
-    for chunk in response:
-        for part in chunk.parts:
-            buffer.append(part.text)
-        gemReply = str(''.join(buffer))
-
-    return gemReply
+    # Using LangChain to generate content instead of direct Gemini API
+    response = llm.invoke([HumanMessage(content=prompt)])
+    return response.content
 
 def get_roles(intro):
     prompt = (

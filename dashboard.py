@@ -2,19 +2,23 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 from flask_httpauth import HTTPBasicAuth
 import os
 import json
-from dotenv import load_dotenv, set_key
+import subprocess
+from dotenv import load_dotenv, set_key, find_dotenv
 from functools import wraps
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 auth = HTTPBasicAuth()
 
-# Default admin credentials - consider changing these or moving to environment variables
-ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "juleadmin"
-
 # Path to the .env file
 ENV_FILE = os.path.join(os.path.dirname(__file__), '.env')
+
+# Load environment variables
+load_dotenv(ENV_FILE)
+
+# Admin credentials from environment with defaults
+ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')
+ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'juleadmin')
 
 @auth.verify_password
 def verify_password(username, password):
@@ -29,8 +33,18 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def is_first_run():
+    """Check if this is the first run by checking for required configurations"""
+    load_dotenv(ENV_FILE)
+    required_vars = ['DISCORD_TOKEN', 'INTRO_CHANNEL_ID', 'ADMIN_CHANNEL_ID', 'GREETING_CHANNEL_ID']
+    return any(not os.getenv(var) for var in required_vars)
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    # If this is first run and no setup has been done, redirect to setup wizard
+    if is_first_run():
+        return redirect(url_for('setup_wizard'))
+        
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
@@ -50,11 +64,54 @@ def logout():
     flash('You were logged out')
     return redirect(url_for('login'))
 
+@app.route('/setup_wizard', methods=['GET', 'POST'])
+def setup_wizard():
+    """First-time setup wizard for bot configuration"""
+    if request.method == 'POST':
+        # Process the submitted setup form
+        setup_data = {
+            # Discord Bot Configuration
+            'DISCORD_TOKEN': request.form.get('DISCORD_TOKEN', ''),
+            'BOT_PREFIX': request.form.get('BOT_PREFIX', '!'),
+            'GEMINI_API_KEY': request.form.get('GEMINI_API_KEY', ''),
+            'GEMINI_MODEL': request.form.get('GEMINI_MODEL', 'gemini-2.0-flash-exp'),
+            
+            # Server Configuration
+            'SERVER_DIRECTORY': request.form.get('SERVER_DIRECTORY', '/home/mcserver/minecraft_bedrock'),
+            'SERVER_PROPERTIES': request.form.get('SERVER_PROPERTIES', '/home/mcserver/minecraft_bedrock/server.properties'),
+            'SERVER_SERVICE': request.form.get('SERVER_SERVICE', 'minecraft-bedrock.service'),
+            
+            # Admin Credentials
+            'ADMIN_USERNAME': request.form.get('ADMIN_USERNAME', ADMIN_USERNAME),
+            'ADMIN_PASSWORD': request.form.get('ADMIN_PASSWORD', ADMIN_PASSWORD),
+            
+            # Welcome Configuration
+            'WELCOME_TITLE': request.form.get('WELCOME_TITLE', '🌟 Welcome to Our Community! 🌟'),
+            'WELCOME_MESSAGE': request.form.get('WELCOME_MESSAGE', 'Explore the channels, make new connections, and enjoy your stay!'),
+            'WELCOME_FOOTER': request.form.get('WELCOME_FOOTER', 'Feel free to ask questions or introduce yourself!')
+        }
+        
+        # Create or update .env file
+        if not os.path.exists(ENV_FILE):
+            open(ENV_FILE, 'a').close()
+            
+        # Save all settings to .env file
+        for key, value in setup_data.items():
+            set_key(ENV_FILE, key, value)
+            
+        flash('Setup completed successfully! You can now log in with your admin credentials.')
+        return redirect(url_for('login'))
+        
+    return render_template('setup_wizard.html', first_run=True)
+
 @app.route('/')
 @login_required
 def dashboard():
     # Load environment variables
     load_dotenv(ENV_FILE)
+    
+    # Check if setup is complete
+    setup_complete = not is_first_run()
     
     # Group environment variables by category
     env_vars = {
@@ -68,6 +125,10 @@ def dashboard():
             'SERVER_DIRECTORY': os.getenv('SERVER_DIRECTORY', '/home/mcserver/minecraft_bedrock'),
             'SERVER_PROPERTIES': os.getenv('SERVER_PROPERTIES', '/home/mcserver/minecraft_bedrock/server.properties'),
             'SERVER_SERVICE': os.getenv('SERVER_SERVICE', 'minecraft-bedrock.service')
+        },
+        'Admin Configuration': {
+            'ADMIN_USERNAME': os.getenv('ADMIN_USERNAME', ADMIN_USERNAME),
+            'ADMIN_PASSWORD': os.getenv('ADMIN_PASSWORD', ADMIN_PASSWORD)
         },
         'Channel IDs': {
             'INTRO_CHANNEL_ID': os.getenv('INTRO_CHANNEL_ID', ''),
@@ -92,7 +153,7 @@ def dashboard():
     except json.JSONDecodeError:
         role_mappings = {}
     
-    return render_template('dashboard.html', env_vars=env_vars, role_mappings=role_mappings)
+    return render_template('dashboard.html', env_vars=env_vars, role_mappings=role_mappings, setup_complete=setup_complete)
 
 @app.route('/update_env', methods=['POST'])
 @login_required
@@ -147,10 +208,29 @@ def update_env():
 @app.route('/restart_bot')
 @login_required
 def restart_bot():
-    # Implement bot restart functionality here
-    # This could be via systemctl, pm2, or another process manager
-    # For example: os.system('systemctl restart jule-bot.service')
-    flash('Bot restart requested')
+    try:
+        bot_service = os.getenv('BOT_SERVICE', 'jule-bot.service')
+        result = subprocess.run(['systemctl', 'restart', bot_service], 
+                               capture_output=True, text=True, check=True)
+        flash('Bot has been restarted successfully')
+    except subprocess.CalledProcessError as e:
+        flash(f'Failed to restart bot: {e.stderr}')
+    except Exception as e:
+        flash(f'Error restarting bot: {str(e)}')
+    
+    return redirect(url_for('dashboard'))
+
+@app.route('/configure_channels', methods=['POST'])
+@login_required
+def configure_channels():
+    """Send command to bot to configure channels and roles"""
+    try:
+        # This endpoint would trigger the bot to set up channels if needed
+        # We could use a local socket, API call, or command file that the bot watches
+        flash('Channel configuration request sent to bot')
+    except Exception as e:
+        flash(f'Error configuring channels: {str(e)}')
+    
     return redirect(url_for('dashboard'))
 
 if __name__ == '__main__':

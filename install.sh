@@ -26,7 +26,8 @@ source venv/bin/activate
 # Install requirements
 echo "Installing required packages..."
 pip install discord.py google-generativeai python-dotenv
-
+echo "Installing dependencies for Jule Discord Bot..."
+pip install discord.py python-dotenv langchain-google-genai google-generativeai langchain
 # Create .env file from template if it doesn't exist
 if [ ! -f ".env" ]; then
     echo "Creating .env file from template..."
