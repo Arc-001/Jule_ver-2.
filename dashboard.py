@@ -97,23 +97,51 @@ def dashboard():
 @app.route('/update_env', methods=['POST'])
 @login_required
 def update_env():
+    # Check if .env file exists, create it if not
+    if not os.path.exists(ENV_FILE):
+        open(ENV_FILE, 'a').close()
+        print(f"Created new .env file at {ENV_FILE}")
+    
+    # Check if .env file is writable
+    if not os.access(ENV_FILE, os.W_OK):
+        flash('Error: .env file is not writable. Please check permissions.')
+        print(f"Error: .env file at {ENV_FILE} is not writable")
+        return redirect(url_for('dashboard'))
+
     # Load current environment variables
     load_dotenv(ENV_FILE)
     
     # Update environment variables from form
+    success = True
     for key, value in request.form.items():
         if key != 'role_mappings':  # Handle role mappings separately
-            set_key(ENV_FILE, key, value)
+            try:
+                set_key(ENV_FILE, key, value)
+                print(f"Updated {key}={value} in .env file")
+            except Exception as e:
+                success = False
+                print(f"Error setting {key}: {str(e)}")
+                flash(f'Error updating {key}: {str(e)}')
     
     # Handle role mappings (from JSON)
     if 'role_mappings' in request.form:
         try:
             role_mappings = json.loads(request.form['role_mappings'])
             set_key(ENV_FILE, 'ROLE_MAPPINGS', json.dumps(role_mappings))
+            print(f"Updated ROLE_MAPPINGS in .env file")
         except json.JSONDecodeError:
+            success = False
             flash('Invalid JSON format for role mappings')
+        except Exception as e:
+            success = False
+            print(f"Error setting ROLE_MAPPINGS: {str(e)}")
+            flash(f'Error updating ROLE_MAPPINGS: {str(e)}')
     
-    flash('Environment variables have been updated')
+    if success:
+        flash('Environment variables have been updated')
+    else:
+        flash('Some environment variables could not be updated. Check the server logs for details.')
+    
     return redirect(url_for('dashboard'))
 
 @app.route('/restart_bot')
