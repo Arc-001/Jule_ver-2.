@@ -3,8 +3,18 @@ import google.generativeai as gemini
 from collections import deque
 import subprocess
 import json
+import os
+from dotenv import load_dotenv
 
-gemini.configure(api_key="ENTER YOUR API KEY")
+# Load environment variables from .env file
+load_dotenv()
+
+# Get API keys from environment variables
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+print(DISCORD_TOKEN)
+# Configure Gemini API
+gemini.configure(api_key=GEMINI_API_KEY or "ENTER YOUR API KEY")
 model = gemini.GenerativeModel("gemini-2.0-flash-exp")
 
 # Role mapping name(str) -> role id(int)
@@ -248,7 +258,7 @@ intents.message_content = True              # Enable message intents if needed
 intents.members = True
 
 # Run the bot
-TOKEN = ""
+TOKEN = DISCORD_TOKEN
 client = Client(intents = intents)
 client.run(TOKEN)
 
