@@ -15,7 +15,7 @@ DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 print(DISCORD_TOKEN)
 # Configure Gemini API
 gemini.configure(api_key=GEMINI_API_KEY or "ENTER YOUR API KEY")
-model = gemini.GenerativeModel("gemini-2.0-flash-exp")
+model = gemini.GenerativeModel("gemini-2.0")
 
 # Role mapping name(str) -> role id(int)
 #example role mapping with role to role id maping
